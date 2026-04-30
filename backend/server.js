@@ -21,11 +21,7 @@ const MONGO_URI = process.env.MONGO_URI;
 const app = express();
 const server = http.createServer(app);
 
-app.use(cors({
-    origin: "http://localhost:3000", // React frontend
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true
-}));
+
 
 app.use(express.json());
 
@@ -39,6 +35,20 @@ const allowedOrigins = [
   "http://localhost:3000",
   process.env.FRONTEND_URL
 ];
+app.use(cors({
+  origin: function (origin, callback) {
+    console.log("CORS request from:", origin); // debug
+
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log("Blocked by CORS:", origin);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
+}));
 
 const io = new Server(server, {
   cors: {
