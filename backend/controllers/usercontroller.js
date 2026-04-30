@@ -1,5 +1,6 @@
 const User = require("../models/user");
 const bcrypt = require("bcryptjs"); // needed for changePassword
+const Offer = require("../models/offers");
 
 const usercontroller = {
 
@@ -131,8 +132,123 @@ const usercontroller = {
       console.error("Error finding user:", err);
       return null;
     }
+  },
+
+
+
+ // adjust path if needed
+
+// helper function
+
+
+// ✅ Controller function
+async getRecentActivity (req, res) {
+  try {
+    const userId = req.user.user_id;
+    console.log("Fetching recent activity for user:", userId);
+    const activities = await Offer.find({
+      creator_id: userId,
+      status: "completed"
+    })
+      .sort({ completed_at: -1 })
+      .limit(5);
+
+    const formatted = activities.map(a => ({
+      type: a.offer_type,
+      amount: `${a.units} kWh`,
+      tokens: a.total_tokens,
+      time: timeAgo(a.completed_at),
+      status: a.status
+    }));
+    console.log("Recent activities fetched:", formatted);
+
+    res.json({ success: true, data: formatted });
+
+  } catch (err) {
+    console.error("Recent activity error:", err);
+    res.status(500).json({ msg: err.message });
   }
+},
+
+async getDashboardStats(req, res){
+  try {
+    const userId = req.user.user_id;
+
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - 30);
+
+    // Total Sold
+    const sold = await Offer.aggregate([
+      {
+        $match: {
+          creator_id: userId,
+          offer_type: "sell",
+          created_at: { $gte: fromDate },
+          status: "completed"
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$units" }
+        }
+      }
+    ]);
+
+    // Total Bought
+    const bought = await Offer.aggregate([
+      {
+        $match: {
+          creator_id: userId,
+          offer_type: "buy",
+          created_at: { $gte: fromDate },
+          status: "completed"
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$units" }
+        }
+      }
+    ]);
+
+    const totalSold = sold[0]?.total || 0;
+    const totalBought = bought[0]?.total || 0;
+
+    res.json({
+      success: true,
+      data: {
+        totalSold,
+        totalBought,
+        net: totalSold - totalBought
+      }
+    });
+
+  } catch (err) {
+    res.status(500).json({ msg: err.message });
+  }
+}
 
 };
+
+ const timeAgo = (date) => {
+  const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+
+  const intervals = [
+    { label: "day", value: 86400 },
+    { label: "hour", value: 3600 },
+    { label: "minute", value: 60 }
+  ];
+
+  for (let i of intervals) {
+    const count = Math.floor(seconds / i.value);
+    if (count > 0) {
+      return `${count} ${i.label}${count > 1 ? "s" : ""} ago`;
+    }
+  }
+
+  return "just now";
+}
 
 module.exports = usercontroller;

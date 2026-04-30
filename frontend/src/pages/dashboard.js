@@ -16,6 +16,8 @@ import { init3DCardTilt } from "../card-3d-tilt.js";
 export default function Dashboard() {
     const [userData, setUserData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [activities, setActivities] = useState([]);
+const [activityLoading, setActivityLoading] = useState(true);
     const [showBookIntro, setShowBookIntro] = useState(false);
     const [showLedgerModal, setShowLedgerModal] = useState(false);
     const [ledgerData, setLedgerData] = useState([]);
@@ -25,7 +27,7 @@ export default function Dashboard() {
     const navigate = useNavigate();
 
     const token = localStorage.getItem("token");
-
+    const API = process.env.REACT_APP_API_URL;
     // Check if book intro should play (only once ever)
     useEffect(() => {
         const hasSeenBookIntro = localStorage.getItem("dashboard_book_intro_seen");
@@ -48,7 +50,7 @@ export default function Dashboard() {
             }
 
             try {
-                const res = await fetch("http://localhost:5001/api/auth/profile", {
+                const res = await fetch(`${API}/api/auth/profile`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
 
@@ -82,61 +84,139 @@ export default function Dashboard() {
         }
     }, [userData]);
 
+
     // Generate realistic chart data with logical trends
-    const generateChartData = (type, days = 30) => {
-        const data = [];
-        const today = new Date();
+const generateChartData = async (type, days = 30, mode = "created") => {
+  try {
+    const token = localStorage.getItem("token");
 
-        // Base values and trends
-        const baseValue = type === 'sold' ? 45 : 30;
-        const trendDirection = type === 'sold' ? 1.02 : 0.98; // Sold increasing, bought stable
-
-        for (let i = days - 1; i >= 0; i--) {
-            const date = new Date(today);
-            date.setDate(date.getDate() - i);
-
-            // Create realistic pattern with:
-            // - Weekly cycles (higher on weekdays)
-            // - Gradual trend
-            // - Small random variation
-            const dayOfWeek = date.getDay();
-            const weekdayMultiplier = (dayOfWeek >= 1 && dayOfWeek <= 5) ? 1.2 : 0.8;
-            const trendMultiplier = Math.pow(trendDirection, days - i);
-            const randomVariation = 0.85 + Math.random() * 0.3; // ±15%
-
-            const value = baseValue * weekdayMultiplier * trendMultiplier * randomVariation;
-
-            // Format label
-            let label;
-            if (i === 0) {
-                label = 'Today';
-            } else if (i === 1) {
-                label = 'Yesterday';
-            } else if (i <= 7) {
-                label = `${i}d ago`;
-            } else if (i === days - 1) {
-                label = `${days}d ago`;
-            } else if (i % 5 === 0) {
-                label = `${i}d`;
-            } else {
-                label = '';
-            }
-
-            data.push({
-                label,
-                value: Math.max(0, value)
-            });
+    const res = await fetch(
+      `${API}/api/offers/getchart?type=${type}&days=${days}&mode=${mode}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
         }
+      }
+    );
 
-        return data;
+    if (!res.ok) throw new Error("Failed to fetch chart data");
+
+    const backendData = await res.json();
+
+    const today = new Date();
+    const data = [];
+
+    // 🔥 Fast lookup map
+    const map = new Map(
+      backendData.map(d => [d._id, d.total])
+    );
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+
+      const formattedDate = date.toLocaleDateString("en-CA"); // YYYY-MM-DD
+
+      const value = map.get(formattedDate) || 0;
+
+      let label;
+      if (i === 0) label = "Today";
+      else if (i === 1) label = "Yesterday";
+      else if (i <= 7) label = `${i}d ago`;
+      else if (i % 5 === 0) label = `${i}d`;
+      else label = "";
+
+      data.push({ label, value });
+    }
+
+    return data;
+
+  } catch (err) {
+    console.error("Chart fetch failed:", err);
+    return []; // fallback
+  }
+};
+
+    const [energySoldData, setEnergySoldData] = useState([]);
+const [energyBoughtData, setEnergyBoughtData] = useState([]);
+const [chartLoading, setChartLoading] = useState(true);
+
+const [stats, setStats] = useState({
+  totalSold: 0,
+  totalBought: 0,
+  net: 0
+});
+
+useEffect(() => {
+    const loadChartData = async () => {
+        try {
+            const sold = await generateChartData("sell", 30);
+            const bought = await generateChartData("buy", 30);
+
+            setEnergySoldData(sold);
+            setEnergyBoughtData(bought);
+        } catch (err) {
+            console.error("Chart load error:", err);
+        } finally {
+            setChartLoading(false);
+        }
     };
 
-    const energySoldData = generateChartData('sold', 30);
-    const energyBoughtData = generateChartData('bought', 30);
+    loadChartData();
+}, []);
+useEffect(() => {
+    const fetchActivity = async () => {
+        try {
+            const res = await fetch(`${API}/api/users/activity`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
 
-    // Calculate totals
-    const totalSold = energySoldData.reduce((sum, d) => sum + d.value, 0);
-    const totalBought = energyBoughtData.reduce((sum, d) => sum + d.value, 0);
+            const result = await res.json();
+
+            if (result.success) {
+                setActivities(result.data);
+            }
+        } catch (err) {
+            console.error("Activity fetch error:", err);
+        } finally {
+            setActivityLoading(false);
+        }
+    };
+
+    fetchActivity();
+}, []);
+
+useEffect(() => {
+    const fetchStats = async () => {
+        try {
+            const res = await fetch(`${API}/api/users/dashboard-stats`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+
+            const result = await res.json();
+
+            if (result.success) {
+                setStats(result.data);
+            }
+        } catch (err) {
+            console.error("Stats error:", err);
+        }
+    };
+
+    fetchStats();
+}, []);
+
+const totalSold = Array.isArray(energySoldData)
+    ? energySoldData.reduce((sum, d) => sum + d.value, 0)
+    : 0;
+
+const totalBought = Array.isArray(energyBoughtData)
+    ? energyBoughtData.reduce((sum, d) => sum + d.value, 0)
+    : 0;
 
     if (loading) {
         return (
@@ -148,7 +228,18 @@ export default function Dashboard() {
             </div>
         );
     }
-
+{chartLoading ? (
+    <div className="h-[250px] flex items-center justify-center text-gray-400">
+        Loading chart...
+    </div>
+) : (
+    <LineChart
+        data={energySoldData}
+        color="#10b981"
+        label="kWh Sold"
+        height={250}
+    />
+)}
     if (!userData) {
         return (
             <div className="min-h-screen flex items-center justify-center p-4">
@@ -165,7 +256,7 @@ export default function Dashboard() {
         setLedgerLoading(true);
         console.log("[LEDGER] Fetching EB bills from backend...");
         try {
-            const res = await fetch("http://localhost:5001/api/gov/eb-bills", {
+            const res = await fetch(`${API}/api/gov/eb-bills`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const data = await res.json();
@@ -195,6 +286,18 @@ export default function Dashboard() {
             setFilteredLedger(filtered);
         }
     };
+
+    const activeDaysBought = energyBoughtData.filter(d => d.value > 0).length;
+
+const avgBought = activeDaysBought > 0
+  ? (totalBought / activeDaysBought)
+  : 0;
+
+  const activeDaysSold = energySoldData.filter(d => d.value > 0).length;
+
+const avgSold = activeDaysSold > 0
+  ? (stats.totalSold / activeDaysSold)
+  : 0;
 
     // Shorten wallet address
     const shortenAddress = (address) => {
@@ -268,33 +371,6 @@ export default function Dashboard() {
                     </p>
                 </div>
 
-                {/* Government Ledger Card - AT THE TOP */}
-                <div className="mb-6 card-stagger card-stagger-2">
-                    <div className="energy-card energy-card-blockchain p-6">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                                    <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-200">Government Ledger</h3>
-                                    <p className="text-sm text-gray-400">Blockchain verified smart meter transactions for EB officials</p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={openLedger}
-                                className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors flex items-center gap-2"
-                            >
-                                Open Ledger
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                </div>
 
                 {/* Header */}
                 <div className="mb-8 card-stagger card-stagger-2">
@@ -368,6 +444,8 @@ export default function Dashboard() {
                     </div>
                 </div>
 
+                
+
                 {/* Stats Summary */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     {/* Total Sold */}
@@ -375,30 +453,30 @@ export default function Dashboard() {
                         <div className="flex items-center justify-between mb-4">
                             <div>
                                 <p className="data-label">Total Energy Sold (30d)</p>
-                                <p className="data-value data-value-solar">{totalSold.toFixed(1)} kWh</p>
+                                <p className="data-value data-value-solar">{stats.totalSold.toFixed(1)} kWh</p>
                             </div>
                             <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
                                 <ArrowTrendingUpIcon className="w-6 h-6 text-green-500" />
                             </div>
                         </div>
                         <p className="text-sm text-gray-400">
-                            Avg: {(totalSold / 30).toFixed(1)} kWh/day
+                            Avg: {(stats.totalSold/ 30).toFixed(1)} kWh/day
                         </p>
                     </div>
-
+                      
                     {/* Total Bought */}
                     <div className="energy-card energy-card-blockchain card-stagger card-stagger-8">
                         <div className="flex items-center justify-between mb-4">
                             <div>
                                 <p className="data-label">Total Energy Bought (30d)</p>
-                                <p className="data-value text-blue-400">{totalBought.toFixed(1)} kWh</p>
+                                <p className="data-value text-blue-400">{stats.totalBought.toFixed(1)} kWh</p>
                             </div>
                             <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
                                 <ArrowTrendingDownIcon className="w-6 h-6 text-blue-500" />
                             </div>
                         </div>
                         <p className="text-sm text-gray-400">
-                            Avg: {(totalBought / 30).toFixed(1)} kWh/day
+                            Avg: {(stats.totalBought / 30).toFixed(1)} kWh/day
                         </p>
                     </div>
 
@@ -408,7 +486,7 @@ export default function Dashboard() {
                             <div>
                                 <p className="data-label">Net Energy (30d)</p>
                                 <p className={`data-value ${totalSold > totalBought ? 'text-energy' : 'text-blue-400'}`}>
-                                    {(totalSold - totalBought).toFixed(1)} kWh
+                                  {stats.net.toFixed(1)} kWh
                                 </p>
                             </div>
                             <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${totalSold > totalBought ? 'bg-green-500/20' : 'bg-blue-500/20'
@@ -461,134 +539,53 @@ export default function Dashboard() {
                 <div className="energy-card card-stagger card-stagger-10">
                     <h3 className="text-xl font-bold mb-4">Recent Activity</h3>
                     <div className="space-y-3">
-                        {[
-                            { type: 'sell', amount: '45 kWh', tokens: '135', time: '2 hours ago', status: 'completed' },
-                            { type: 'buy', amount: '30 kWh', tokens: '90', time: '5 hours ago', status: 'completed' },
-                            { type: 'sell', amount: '60 kWh', tokens: '180', time: '1 day ago', status: 'completed' },
-                        ].map((activity, i) => (
-                            <div
-                                key={i}
-                                className={`activity-item flex items-center justify-between p-4 bg-energy-subtle rounded-lg border border-energy`}
-                                style={{ animationDelay: `${(i + 1) * 50}ms` }}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center dashboard-icon ${activity.type === 'sell' ? 'bg-green-500/20' : 'bg-blue-500/20'
-                                        }`}>
-                                        {activity.type === 'sell' ? (
-                                            <ArrowTrendingUpIcon className="w-5 h-5 text-green-500" />
-                                        ) : (
-                                            <ArrowTrendingDownIcon className="w-5 h-5 text-blue-500" />
-                                        )}
-                                    </div>
-                                    <div>
-                                        <p className="font-semibold">
-                                            {activity.type === 'sell' ? 'Sold' : 'Bought'} {activity.amount}
-                                        </p>
-                                        <p className="text-sm text-gray-400">{activity.time}</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="font-semibold text-solar">{activity.tokens} Tokens</p>
-                                    <span className="status-badge status-completed text-xs">
-                                        {activity.status}
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
+    {activityLoading ? (
+        <p className="text-gray-400">Loading activity...</p>
+    ) : activities.length === 0 ? (
+        <p className="text-gray-400">No recent activity</p>
+    ) : (
+        activities.map((activity, i) => (
+            <div
+                key={i}
+                className={`activity-item flex items-center justify-between p-4 bg-energy-subtle rounded-lg border border-energy`}
+            >
+                <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        activity.type === 'sell' ? 'bg-green-500/20' : 'bg-blue-500/20'
+                    }`}>
+                        {activity.type === 'sell' ? (
+                            <ArrowTrendingUpIcon className="w-5 h-5 text-green-500" />
+                        ) : (
+                            <ArrowTrendingDownIcon className="w-5 h-5 text-blue-500" />
+                        )}
                     </div>
+
+                    <div>
+                        <p className="font-semibold">
+                            {activity.type === 'sell' ? 'Sold' : 'Bought'} {activity.amount}
+                        </p>
+                        <p className="text-sm text-gray-400">{activity.time}</p>
+                    </div>
+                </div>
+
+                <div className="text-right">
+                    <p className="font-semibold text-solar">
+                        {activity.tokens} Tokens
+                    </p>
+                    <span className="status-badge status-completed text-xs">
+                        {activity.status}
+                    </span>
+                </div>
+            </div>
+        ))
+    )}
+</div>
                 </div>
 
 
             </div>
 
-            {/* Government Ledger Modal */}
-            {showLedgerModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowLedgerModal(false)}>
-                    <div className="energy-card max-w-6xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="p-6 border-b border-gray-700 flex items-center justify-between">
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-200">Government Ledger</h2>
-                                <p className="text-sm text-gray-400 mt-1">EB Bill Verification Data</p>
-                            </div>
-                            <button
-                                onClick={() => setShowLedgerModal(false)}
-                                className="w-10 h-10 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
 
-                        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-                            {/* Search */}
-                            <div className="mb-6 flex items-center gap-3 p-4 bg-energy-subtle rounded-lg border border-energy">
-                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                                <input
-                                    type="text"
-                                    placeholder="Search by User ID..."
-                                    value={searchUserId}
-                                    onChange={(e) => handleLedgerSearch(e.target.value)}
-                                    className="flex-1 bg-transparent border-none outline-none text-gray-300 placeholder-gray-500"
-                                />
-                            </div>
-
-                            {/* Total Users */}
-                            <div className="mb-4 text-sm text-gray-400">
-                                Total Users: <span className="text-solar font-semibold">{filteredLedger.length}</span>
-                            </div>
-
-                            {/* Table */}
-                            {ledgerLoading ? (
-                                <div className="text-center py-12">
-                                    <div className="skeleton w-16 h-16 rounded-full mx-auto mb-4"></div>
-                                    <p className="text-gray-400">Loading ledger data...</p>
-                                </div>
-                            ) : filteredLedger.length === 0 ? (
-                                <div className="text-center py-12 text-gray-400">
-                                    No data available
-                                </div>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-gray-700">
-                                                <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">User ID</th>
-                                                <th className="text-left py-3 px-4 text-sm font-semibold text-gray-400">EB Bill Number</th>
-                                                <th className="text-right py-3 px-4 text-sm font-semibold text-gray-400">No. of Units Used (kWh)</th>
-                                                <th className="text-right py-3 px-4 text-sm font-semibold text-gray-400">Amount (₹)</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredLedger.map((item, index) => (
-                                                <tr
-                                                    key={index}
-                                                    className="border-b border-gray-800 hover:bg-energy-subtle transition-colors"
-                                                >
-                                                    <td className="py-3 px-4 text-sm font-mono text-blue-400">
-                                                        {item.user_id}
-                                                    </td>
-                                                    <td className="py-3 px-4 text-sm text-gray-300">
-                                                        {item.eb_bill_number}
-                                                    </td>
-                                                    <td className="py-3 px-4 text-sm text-right text-solar">
-                                                        {item.total_units.toFixed(2)}
-                                                    </td>
-                                                    <td className="py-3 px-4 text-sm text-right text-energy">
-                                                        ₹{item.total_amount.toFixed(2)}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 }

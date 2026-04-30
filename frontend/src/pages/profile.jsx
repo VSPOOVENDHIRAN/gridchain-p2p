@@ -25,7 +25,7 @@ export default function Profile() {
   const [showNewPass, setShowNewPass] = useState(false);
 
   const token = localStorage.getItem("token");
-
+const API = process.env.REACT_APP_API_URL;
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user_id");
@@ -36,7 +36,7 @@ export default function Profile() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5001/api/auth/profile", {
+      const res = await fetch(`${API}/api/auth/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -60,7 +60,7 @@ export default function Profile() {
 
     fetchProfile();
 
-    const socket = io("http://localhost:5001", {
+    const socket = io(`${API}`, {
       auth: { token },
     });
 
@@ -93,7 +93,7 @@ export default function Profile() {
     setPasswordMsg("Processing...");
 
     try {
-      const res = await fetch("http://localhost:5001/api/users/change-password", {
+      const res = await fetch(`${API}/api/users/change-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -8,7 +8,7 @@ export default function Register() {
     const [otp, setOtp] = useState("");
     const [deviceInfo, setDeviceInfo] = useState(null); // meter_id, gridid from backend
     const [isPhoneVerified, setIsPhoneVerified] = useState(false);
-
+    const API = process.env.REACT_APP_API_URL;
     const [formData, setFormData] = useState({
         name: "",
         email: "",
@@ -50,8 +50,8 @@ export default function Register() {
 
         try {
             // Send OTP directly without device validation (this is signup, not login)
-            console.log("[REGISTER] Calling API: http://localhost:5001/api/auth/check-device");
-            const otpResponse = await fetch("http://localhost:5001/api/auth/check-device", {
+            console.log("[REGISTER] Calling API: " + `${API}/api/auth/check-device`);
+            const otpResponse = await fetch(`${API}/api/auth/check-device`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ phone: phoneNumber }),
@@ -92,7 +92,7 @@ export default function Register() {
         setLoading(true);
 
         try {
-            const response = await fetch("http://localhost:5001/api/auth/verify-otp", {
+            const response = await fetch(`${API}/api/auth/verify-otp`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -155,7 +155,7 @@ export default function Register() {
         setLoading(true);
 
         try {
-            const response = await fetch("http://localhost:5001/api/auth/register", {
+            const response = await fetch(`${API}/api/auth/register`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -192,7 +192,7 @@ export default function Register() {
         setLoading(true);
 
         try {
-            const response = await fetch("http://localhost:5001/api/auth/send-otp", {
+            const response = await fetch(`${API}/api/auth/send-otp`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ phone: phoneNumber }),

@@ -11,5 +11,7 @@ router.post("/register", authController.registerUser);
 router.post("/login", authController.login);
 router.post("/change-password",authMiddleware,userController.changePassword);
 router.get("/profile",authMiddleware,userController.getUserProfile);
+router.get("/activity", authMiddleware, userController.getRecentActivity);
+router.get("/dashboard-stats", authMiddleware, userController.getDashboardStats);
 
 module.exports = router;

@@ -3,18 +3,20 @@ import json
 import time
 import random
 from datetime import datetime, timezone
+import os
+from dotenv import load_dotenv
 
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
-#        MQTT CONFIGURATION (HiveMQ Cloud)
+BROKER = os.getenv("BROKER")
+PORT = int(os.getenv("PORT", 8883))
+USERNAME = os.getenv("USERNAME")
+PASSWORD = os.getenv("PASSWORD")
 
-BROKER = "d2ed7624168549baa276fe4f8c9fb29e.s1.eu.hivemq.cloud"
-PORT = 8883
-USERNAME = "poovuexample"
-PASSWORD = "qY6k574ZeP_JNr@"
-
-
+print(BROKER, PORT, USERNAME, PASSWORD)
 #        METER SIMULATION CONFIG
-
+#d2ed7624168549baa276fe4f8c9fb29e.s1.eu.hivemq.cloud 8883 poovuexample qY6k574ZeP_JNr@
+#d2ed7624168549baa276fe4f8c9fb29e.s1.eu.hivemq.cloud 8883 poovendhiran qY6k574ZeP_JNr@
 METER_IDS = ["MTR_SIM_001", "MTR_SIM_002", "MTR_SIM_003", "MTR_SIM_004"]
 
 # Keep cumulative readings per meter

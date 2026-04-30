@@ -5,12 +5,12 @@ export default function History() {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [serverError, setServerError] = useState(false);
-
+ const API = process.env.REACT_APP_API_URL;
   const fetchOffers = async () => {
     try {
       const token = localStorage.getItem("token");
       console.log("[HISTORY] Fetching closed offers...");
-      const res = await fetch("http://localhost:5001/api/offers/complete", {
+      const res = await fetch(`${API}/api/offers/complete`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

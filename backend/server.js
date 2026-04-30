@@ -1,16 +1,6 @@
 // ---------------------- Load ENV Variables ----------------------
 require("dotenv").config();
 
-console.log("=== ENVIRONMENT VARIABLES DEBUG ===");
-console.log("TWILIO_ACCOUNT_SID:", process.env.TWILIO_ACCOUNT_SID ? "✓ Loaded" : "❌ NOT FOUND");
-console.log("TWILIO_AUTH_TOKEN:", process.env.TWILIO_AUTH_TOKEN ? "✓ Loaded" : "❌ NOT FOUND");
-console.log("TWILIO_VERIFY_SERVICE_SID:", process.env.TWILIO_VERIFY_SERVICE_SID ? "✓ Loaded" : "❌ NOT FOUND");
-console.log("MQTT_BROKER:", process.env.MQTT_BROKER ? "✓ Loaded" : "❌ NOT FOUND");
-console.log("MONGO_URI:", process.env.MONGO_URI ? "✓ Loaded" : "❌ NOT FOUND");
-console.log("PORT:", process.env.PORT || 5001);
-console.log("===================================");
-
-// ---------------------- Core Imports ----------------------
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
@@ -45,11 +35,16 @@ mongoose.connect(MONGO_URI)
     .catch(err => console.error("MongoDB error:", err));
 
 // ---------------------- Socket.IO Setup ----------------------
+const allowedOrigins = [
+  "http://localhost:3000",
+  process.env.FRONTEND_URL
+];
+
 const io = new Server(server, {
-    cors: {
-        origin: "http://localhost:3000", // React frontend
-        methods: ["GET", "POST"]
-    }
+  cors: {
+    origin: allowedOrigins,
+    methods: ["GET", "POST"]
+  }
 });
 
 io.on("connection", (socket) => {

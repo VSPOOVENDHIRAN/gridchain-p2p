@@ -13,6 +13,7 @@ const GovLedger = () => {
     const [searchQuery, setSearchQuery] = useState('');
 
     const token = localStorage.getItem('token');
+    const API = process.env.REACT_APP_API_URL;
 
     useEffect(() => {
         if (!token) {
@@ -29,7 +30,7 @@ const GovLedger = () => {
 
             const params = search ? `?search=${search}` : '';
             const response = await axios.get(
-                `http://localhost:5001/api/gov/ledger${params}`,
+                `${API}/api/gov/ledger${params}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 

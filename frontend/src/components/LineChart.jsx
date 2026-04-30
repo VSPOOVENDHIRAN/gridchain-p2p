@@ -88,15 +88,18 @@ const LineChart = ({ data, color, label, height = 250 }) => {
                 ctx.fillText(d.label, points[i].x, chartHeight - 10);
             }
         });
+// Y-axis labels
+ctx.textAlign = 'right';
+for (let i = 0; i <= 4; i++) {
+    const value = minValue + (range / 4) * (4 - i);
+    const y = padding + (innerHeight / 4) * i;
 
-        // Y-axis labels
-        ctx.textAlign = 'right';
-        for (let i = 0; i <= 4; i++) {
-            const value = minValue + (range / 4) * (4 - i);
-            const y = padding + (innerHeight / 4) * i;
-            ctx.fillText(value.toFixed(0), padding - 10, y + 4);
-        }
+    const displayValue = range <= 5
+        ? value.toFixed(1)
+        : Math.round(value);
 
+    ctx.fillText(displayValue, padding - 10, y + 4);
+}
     }, [data, color]);
 
     return (

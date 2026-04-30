@@ -23,7 +23,7 @@ export default function TradePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const API = "http://localhost:5001";
+  const API = process.env.REACT_APP_API_URL;
 
   // -------------------------------
   // AUTH HEADER
@@ -55,6 +55,7 @@ export default function TradePage() {
       const all = await axios.get(`${API}/api/offers/other`, {
         headers: authHeader(),
       });
+       
       console.log("[TRADE] Market offers response:", all.data);
       setMarketOffers(Array.isArray(all.data) ? all.data : []);
 
@@ -128,6 +129,7 @@ export default function TradePage() {
       creator_id,
       units: unitsNum,
       token_per_unit: tokenRateNum,
+      offer_type: newOffer.offer_type,
     };
 
     console.log("[TRADE] Creating offer:", offerBody);
@@ -212,86 +214,69 @@ export default function TradePage() {
 
   // -------------------------------
   // CANCEL OFFER
-  // -------------------------------
   const handleCancelOffer = async (offerId) => {
-    const confirmCancel = window.confirm(
-      "Are you sure you want to cancel this offer?"
-    );
-    if (!confirmCancel) return;
-
-    try {
-      const user_id = localStorage.getItem("user_id");
-      if (!user_id) {
-        alert("User not logged in. Please log in again.");
-        return;
-      }
-
-      const res = await axios.post(
-        `${API}/api/offers/cancel`,
-        { user_id, offer_id: offerId },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-          },
-        }
-      );
-
-      if (res.status === 200 || (res.data && res.data.success)) {
-        socket.emit("offerCanceled");
-        fetchOffers();
-        return;
-      }
-
-      alert(res.data?.msg || res.data?.message || "Failed to cancel offer.");
-    } catch (err) {
-      console.error(
-        "Cancel Offer Error:",
-        err.response?.data || err.message || err
-      );
-      alert("Failed to cancel offer. Please check console for details.");
+  try {
+    const user_id = localStorage.getItem("user_id");
+    if (!user_id) {
+      alert("User not logged in.");
+      return;
     }
-  };
+
+    const res = await axios.post(
+      `${API}/api/offers/cancel`,
+      { user_id, offer_id: offerId },
+      { headers: authHeader() }
+    );
+
+    if (res.data?.success || res.status === 200) {
+      socket.emit("offerCanceled");
+      fetchOffers();
+    }
+  } catch (err) {
+    console.error("Cancel Offer Error:", err);
+    alert("Failed to cancel offer.");
+  }
+};
 
   // -------------------------------
   // PURCHASE UNITS (PARTIAL)
   // -------------------------------
   const handlePurchase = async (offerId, units) => {
-    const confirmPurchase = window.confirm(`Confirm purchase of ${units} units?`);
-    if (!confirmPurchase) return;
+  const loggedUserId = localStorage.getItem("user_id");
+  if (!loggedUserId) {
+    alert("Please log in.");
+    return;
+  }
 
-    const loggedUserId = localStorage.getItem("user_id");
-    if (!loggedUserId) {
-      alert("Please log in.");
-      return;
-    }
-
-    const payload = {
-      offer_id: offerId,
-      user_id: loggedUserId,
-      unit: Number(units)
-    };
-
-    console.log("[TRADE] Purchasing units:", payload);
-
-    try {
-      const res = await axios.post(`${API}/api/offers/accept`, payload, {
-        headers: authHeader()
-      });
-
-      console.log("[TRADE] Purchase response:", res.data);
-
-      if (res.data.success) {
-        alert("Purchase successful!");
-        socket.emit("offersUpdated");
-        fetchOffers();
-      }
-    } catch (err) {
-      console.error("[TRADE] Purchase Error:", err);
-      const msg = err.response?.data?.msg || "Purchase failed";
-      alert(msg);
-    }
+  const payload = {
+    offer_id: offerId,
+    user_id: loggedUserId,
+    unit: Number(units),
   };
+
+  console.log("[TRADE] Purchasing units:", payload);
+
+  try {
+    const res = await axios.post(
+      `${API}/api/offers/accept`,
+      payload,
+      { headers: authHeader() }
+    );
+
+    console.log("[TRADE] Purchase response:", res.data);
+
+    if (res.data.success) {
+      // optional: remove this alert too if you want silent UX
+      // alert("Purchase successful!");
+      socket.emit("offersUpdated");
+      fetchOffers();
+    }
+  } catch (err) {
+    console.error("[TRADE] Purchase Error:", err);
+    const msg = err.response?.data?.msg || "Purchase failed";
+    alert(msg);
+  }
+};
 
   // -------------------------------
   // OFFER CARD COMPONENT
@@ -341,7 +326,7 @@ export default function TradePage() {
           <div className="flex justify-between items-center">
             <p>
               <b>Available:</b>{" "}
-              <span className="font-semibold text-lg">{offer.units}</span> kWh
+              <span className="font-semibold text-lg">{offer.remaining_units}</span> kWh
             </p>
             <p className="text-solar font-bold">
               {offer.token_per_unit} T/unit
@@ -404,12 +389,12 @@ export default function TradePage() {
                 <input
                   type="number"
                   min="1"
-                  max={offer.units}
+                  max={offer.remaining_units}
                   value={purchaseUnits}
                   onChange={(e) => {
                     let val = parseInt(e.target.value);
                     if (isNaN(val)) val = 1;
-                    if (val > offer.units) val = offer.units;
+                    if (val > offer.remaining_units) val = offer.remaining_units;
                     if (val < 1) val = 1;
                     setPurchaseUnits(val);
                   }}
@@ -418,7 +403,7 @@ export default function TradePage() {
                 />
                 <button
                   onClick={() => handlePurchase(offer.offer_id || offer._id, purchaseUnits)}
-                  disabled={purchaseUnits <= 0 || purchaseUnits > offer.units}
+                  disabled={purchaseUnits <= 0 || purchaseUnits > offer.remaining_units}
                   className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold px-3 py-2 rounded-lg shadow-md transition-colors"
                 >
                   Buy Now
@@ -497,7 +482,7 @@ export default function TradePage() {
               className="w-full px-4 py-2.5 rounded-lg bg-[#1e293b] border border-gray-700 text-white focus:border-white focus:outline-none transition-all h-11"
             >
               <option value="sell" className="bg-[#1e293b] text-white">Sell Energy</option>
-              <option value="buy" className="bg-[#1e293b] text-white">Buy Energy</option>
+              <option value="buy" className="bg-[#1b2b46] text-white">Buy Energy</option>
             </select>
           </div>
 

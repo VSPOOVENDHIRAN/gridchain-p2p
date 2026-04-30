@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
+const API = process.env.REACT_APP_API_URL;
 // Login API call with proper error handling
 const loginUser = async (email, password) => {
   try {
-    const response = await fetch("http://localhost:5001/api/auth/login", {
+    const response = await fetch(`${API}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -64,6 +64,27 @@ export default function Login() {
       setError(data.message);
     }
   };
+
+  const startGanache = async () => {
+  try {
+    setError("");
+    const res = await fetch(`${API}/api/ganache/start-ganache`, {
+      method: "POST",
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.message || "Failed to start Ganache");
+    } else {
+      alert("Ganache started successfully 🚀");
+    }
+  } catch (err) {
+    console.error(err);
+    setError("Cannot reach backend to start Ganache");
+  }
+};
+
 
 
   return (
@@ -169,6 +190,8 @@ export default function Login() {
             </div>
           </div>
 
+          
+
           {/* Login Button */}
           <button
             onClick={handleLogin}
@@ -188,6 +211,13 @@ export default function Login() {
               "Sign In"
             )}
           </button>
+          <button
+  onClick={startGanache}
+  className="btn-energy w-full bg-purple-600 hover:bg-purple-700 mt-3"
+>
+  ⚡ Start Ganache
+</button>
+
 
           {/* Divider */}
           <div className="relative my-6">
@@ -211,7 +241,7 @@ export default function Login() {
         </div>
 
         {/* Footer Info */}
-        <div className="mt-8 text-center">
+        <div className="mt-8 text-center space-y-4">
           <p className="text-gray-500 text-sm">
             Secured by blockchain technology
           </p>
